@@ -118,7 +118,7 @@ export async function applyLoader({
 }: {
   meta: MinecraftVersion;
   loader: MetaLoader;
-}): Promise<void> {
+}): Promise<string> {
   const mcVersion = meta.id; // 此时仍为原版版本号
   const loaderVersion = loader.version || (await resolveLoaderVersion(loader, mcVersion));
 
@@ -156,4 +156,6 @@ export async function applyLoader({
   );
 
   meta.libraries = [...meta.libraries, ...added];
+
+  return loaderVersion;
 }

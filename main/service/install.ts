@@ -75,6 +75,7 @@ export async function installMinecraft({
     }
 
     // 注入加载器（须在 cores manifest 写盘后，避免污染共享 cores）
+    let resolvedLoader = options.loader;
     if (isMetaLoader(options.loader)) {
       reportProgress(
         {
@@ -83,8 +84,9 @@ export async function installMinecraft({
         },
         "running",
       );
-      await applyLoader({ meta, loader: options.loader });
-      log.info(`loader applied: ${options.loader.type}`);
+      const loaderVersion = await applyLoader({ meta, loader: options.loader });
+      resolvedLoader = { ...options.loader, version: loaderVersion };
+      log.info(`loader applied: ${resolvedLoader.type} ${loaderVersion}`);
     }
 
     // 安装核心
@@ -373,7 +375,7 @@ export async function installMinecraft({
         stringify({
           name: options.name,
           version: new URL(options.url).pathname.split("/").pop()!.replace(".json", ""),
-          loader: options.loader,
+          loader: resolvedLoader,
         } as InstanceConfig),
       );
     })();

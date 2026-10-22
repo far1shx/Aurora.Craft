@@ -68,6 +68,17 @@ export function GameCommand({
 
   const latestLoaderVersion = loaderVersions.data?.[0];
 
+  // 拉到版本列表后默认选中最新项
+  useEffect(() => {
+    if (!isMetaLoader || !latestLoaderVersion) return;
+
+    setConfig((prev) =>
+      prev.loader.type === "none" || prev.loader.version
+        ? prev
+        : { ...prev, loader: { type: prev.loader.type, version: latestLoaderVersion } },
+    );
+  }, [isMetaLoader, latestLoaderVersion]);
+
   return (
     <CommandDialog
       open={open.show}
