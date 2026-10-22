@@ -20,7 +20,38 @@ export async function installMinecraft({
 }): Promise<boolean> {
   const log = logger.child("install").child("minecraft").child(options.name);
 
-  // const lastReportTime = 0;
+  const REPORT_INTERVAL = 100;
+
+  let lastReportAt = 0;
+  let pending: {
+    status: "running" | "done" | "error";
+    detail: string;
+    progress: number;
+    expand?: string;
+  } | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const flush = (): void => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+
+    if (!pending || !options.taskId) return;
+
+    app.rpc["event.task"]?.broadcast({
+      id: options.taskId,
+      status: pending.status,
+      progress: Math.min(100, Math.max(0, Math.round(pending.progress))),
+      detail: pending.detail,
+      expand: pending.expand,
+    });
+
+    pending = null;
+    lastReportAt = performance.now();
+  };
+
+  // 合并高频进度：最多每 REPORT_INTERVAL 广播一次，结束态立即发送
   const reportProgress = (
     _options: {
       detail: string;
@@ -31,13 +62,24 @@ export async function installMinecraft({
   ): void => {
     if (!options.taskId) return;
 
-    app.rpc["event.task"]?.broadcast({
-      id: options.taskId,
-      status,
-      progress: Math.min(100, Math.max(0, Math.round(_options.progress))),
-      detail: _options.detail,
-      expand: _options.expand,
-    });
+    pending = { status, ..._options };
+
+    if (status !== "running") {
+      flush();
+      return;
+    }
+
+    const elapsed = performance.now() - lastReportAt;
+
+    if (elapsed >= REPORT_INTERVAL) {
+      flush();
+      return;
+    }
+
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      flush();
+    }, REPORT_INTERVAL - elapsed);
   };
 
   try {
