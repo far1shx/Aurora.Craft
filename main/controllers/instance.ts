@@ -41,7 +41,7 @@ export const instanceController = rpc.router({
           } catch {
             toast({
               title: "未找到实例配置文件",
-              description: `实例 ${entry.name} 未找到配置文件`,
+              description: `实例 ${entry.name} 未找到配置文件或者还在安装`,
               type: "error",
             });
             return undefined;

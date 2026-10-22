@@ -354,6 +354,7 @@ export async function installMinecraft({
     await (async () => {
       await fs.symlink(core, path.join(instance, `${options.name}.jar`));
 
+      meta.inheritsFrom = meta.id;
       meta.id = options.name;
 
       await Bun.write(path.join(instance, `${meta.id}.json`), JSON.stringify(meta, null, 2));

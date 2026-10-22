@@ -29,7 +29,7 @@ export function HomePage(): JSX.Element {
             className="pl-2.5! px-2 h-12 max-w-42 justify-start gap-2.5"
             onClick={async () => {
               await api.launch.run({
-                name: "test",
+                name: "26.3",
                 library: "C:\\Users\\heliu\\AppData\\Local\\aurora.craft",
               });
             }}

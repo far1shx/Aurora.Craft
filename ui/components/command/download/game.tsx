@@ -1,4 +1,4 @@
-import { IconBolt, IconDeviceFloppy, IconDeviceGamepad } from "@tabler/icons-react";
+import { IconBolt, IconBooks, IconDeviceGamepad } from "@tabler/icons-react";
 import { AnimatePresence, motion } from "motion/react";
 import { type ChangeEvent, type JSX, useEffect, useState } from "react";
 import { useSnapshot } from "valtio/react";
@@ -17,6 +17,7 @@ import { toast } from "@/components/ui/toast.tsx";
 import { settingsConfig } from "@/config/settings.ts";
 import { api } from "@/lib/controller.ts";
 import { task } from "@/lib/task.ts";
+import { cn, defaultLibrary } from "@/lib/utils.ts";
 
 export function GameCommand({
   open,
@@ -36,26 +37,17 @@ export function GameCommand({
     url: "",
   });
 
-  const loaders = [
-    { value: "none", label: "不使用加载器" },
-    { value: "fabric", label: "Fabric" },
-    { value: "quilt", label: "Quilt" },
-    { value: "forge", label: "Forge" },
-    { value: "neoforge", label: "NeoForge" },
-  ];
-
   useEffect(() => {
-    const library = settings.library[0] || "";
     const url = open.item?.url ?? "";
     const name = url ? (new URL(url).pathname.split("/").pop()?.replace(".json", "") ?? "") : "";
 
     setConfig((prev) => ({
       ...prev,
-      library,
+      library: defaultLibrary,
       url,
       name,
     }));
-  }, [settings.library, open.item]);
+  }, [open.item]);
 
   return (
     <CommandDialog
@@ -87,7 +79,6 @@ export function GameCommand({
 
             <div className="relative w-full mb-2">
               <Select
-                items={loaders}
                 value={config.loader.type}
                 onValueChange={(value: typeof config.loader.type | null) => {
                   if (value === null) return;
@@ -111,11 +102,31 @@ export function GameCommand({
 
                 <SelectContent alignItemWithTrigger={false}>
                   <SelectGroup>
-                    {loaders.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="none">不使用加载器</SelectItem>
+                    <SelectItem value="fabric">
+                      Fabric{" "}
+                      <span
+                        className={cn(
+                          "ml-auto text-muted-foreground text-xs mt-0.5 transition-all duration-100",
+                          config.loader.type !== "fabric" && "translate-x-5.5",
+                        )}
+                      >
+                        含 mod
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="quilt">
+                      Quilt
+                      <span
+                        className={cn(
+                          "ml-auto text-muted-foreground text-xs mt-0.5 transition-all duration-100",
+                          config.loader.type !== "quilt" && "translate-x-5.5",
+                        )}
+                      >
+                        含 mod
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="forge">Forge</SelectItem>
+                    <SelectItem value="neoforge">NeoForge</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -162,15 +173,17 @@ export function GameCommand({
               }}
             >
               <SelectTrigger className="w-full">
-                <IconDeviceFloppy className="size-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="安装位置" />
+                <IconBooks className="size-4 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="安装位置">
+                  {config.library === defaultLibrary ? "默认" : config.library}
+                </SelectValue>
               </SelectTrigger>
 
               <SelectContent alignItemWithTrigger={false}>
                 <SelectGroup>
                   {settings.library.map((item) => (
                     <SelectItem key={item} value={item}>
-                      {item}
+                      {item === defaultLibrary ? "默认" : item}
                     </SelectItem>
                   ))}
                 </SelectGroup>

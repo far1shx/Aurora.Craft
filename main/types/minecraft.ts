@@ -20,6 +20,7 @@ export interface MinecraftVersion {
     server_mappings?: DownloadArtifact;
   };
   id: string;
+  inheritsFrom: string;
   javaVersion?: {
     component: string;
     majorVersion: number;
