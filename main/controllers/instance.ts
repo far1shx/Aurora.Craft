@@ -25,31 +25,41 @@ export const instanceController = rpc.router({
   ),
   scan: rpc.query(async (options: { library: string }) => {
     const instances = path.join(options.library, "instances");
-    const entries = await fs.readdir(instances, {
-      withFileTypes: true,
-    });
+
+    const entries = await fs.readdir(instances, { withFileTypes: true }).catch(() => []);
 
     const results = await Promise.all(
       entries
         .filter((entry) => entry.isDirectory())
-        .map(async (entry) => {
+        .map(async (entry): Promise<(InstanceConfig & { library: string }) | string> => {
           try {
-            return {
-              ...parse(await Bun.file(path.join(instances, entry.name, "ac.config.toml")).text()),
-              library: options.library,
-            } as unknown as InstanceConfig & { library: string };
+            const config = parse(
+              await Bun.file(path.join(instances, entry.name, "ac.config.toml")).text(),
+            );
+
+            return { ...config, library: options.library } as unknown as InstanceConfig & {
+              library: string;
+            };
           } catch {
-            toast({
-              title: "未找到实例配置文件",
-              description: `实例 ${entry.name} 未找到配置文件或者还在安装`,
-              type: "error",
-            });
-            return undefined;
+            return entry.name;
           }
         }),
     );
 
-    return results.filter((item) => item !== undefined);
+    const valid = results.filter(
+      (item): item is InstanceConfig & { library: string } => typeof item !== "string",
+    );
+    const missing = results.filter((item): item is string => typeof item === "string");
+
+    if (missing.length > 0) {
+      toast({
+        title: "部分实例无法读取",
+        description: `${missing.join("、")} 未找到配置文件或仍在安装`,
+        type: "error",
+      });
+    }
+
+    return valid;
   }),
 });
 
