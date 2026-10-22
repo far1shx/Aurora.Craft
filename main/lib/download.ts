@@ -150,9 +150,33 @@ export async function download(
 }
 
 export interface ConcurrencyOptions<T = unknown> {
+  /** 总尝试次数（含首次），默认 3 */
   retries?: number;
+  /** 基础重试间隔，默认 1000ms */
   delayMs?: number;
+  /** 重试间隔上限，默认 30s */
+  maxDelayMs?: number;
   onRetry?: (error: unknown, item: T, attempt: number) => void;
+  signal?: AbortSignal;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, ms);
+
+    function finish(): void {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    }
+
+    if (signal?.aborted) {
+      finish();
+      return;
+    }
+
+    signal?.addEventListener("abort", finish, { once: true });
+  });
 }
 
 export async function runWithConcurrency<T>(
@@ -165,40 +189,46 @@ export async function runWithConcurrency<T>(
     throw new RangeError("concurrency must be a positive integer");
   }
 
-  const { retries = 3, delayMs = 1000, onRetry } = options;
+  const { retries = 3, delayMs = 1000, maxDelayMs = 30_000, onRetry, signal } = options;
+  const attempts = Math.max(1, Math.floor(retries));
+
   let nextIndex = 0;
+  let failure: { error: unknown } | undefined;
+
+  // 任一任务失败或外部取消后，其余 worker 在领新任务前停止
+  const stopped = (): boolean => failure !== undefined || signal?.aborted === true;
 
   async function runWorker(): Promise<void> {
-    while (true) {
+    while (!stopped()) {
       const index = nextIndex++;
-
       if (index >= items.length) return;
 
-      const item = items[index]!;
-      let lastError: unknown;
+      const item = items[index] as T;
 
-      for (let attempt = 1; attempt <= retries; attempt++) {
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        if (stopped()) return;
+
         try {
           await worker(item, attempt);
-          lastError = undefined;
           break;
         } catch (error) {
-          lastError = error;
-          if (attempt >= retries) {
-            break;
+          if (attempt >= attempts || stopped()) {
+            failure ??= { error };
+            return;
           }
+
           onRetry?.(error, item, attempt);
+
           if (delayMs > 0) {
-            await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+            const backoff = Math.min(delayMs * 2 ** (attempt - 1), maxDelayMs);
+            await sleep(backoff * (0.5 + Math.random() * 0.5), signal);
           }
         }
-      }
-
-      if (lastError !== undefined) {
-        throw lastError;
       }
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker()));
+
+  if (failure !== undefined) throw failure.error;
 }
