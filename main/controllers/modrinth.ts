@@ -1,6 +1,6 @@
-import ky from "ky";
 import { rpc } from "mirinjs/rpc";
 import { MODRINTH_API } from "~/lib/config.ts";
+import { http } from "~/lib/utils.ts";
 
 export const modrinthController = rpc.router({
   search: rpc.query(
@@ -86,7 +86,7 @@ export const modrinthController = rpc.router({
       if (options.offset !== undefined) params.set("offset", String(options.offset));
       if (options.limit !== undefined) params.set("limit", String(options.limit));
 
-      return await ky(`${MODRINTH_API}/search?${params}`).json();
+      return await http(`${MODRINTH_API}/search?${params}`).json();
     },
   ),
 });

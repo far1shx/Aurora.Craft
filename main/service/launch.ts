@@ -3,8 +3,10 @@ import path from "node:path";
 import { logger } from "mirinjs";
 import type { LaunchController } from "~/controllers/launch.ts";
 import type { MutationInput } from "~/lib/utils.ts";
+import { collectArguments } from "~/service/arguments.ts";
 import { instanceConfig } from "~/service/instance.ts";
 import { librariesRule } from "~/service/library.ts";
+import { ensureNatives } from "~/service/natives.ts";
 import type { MinecraftVersion } from "~/types/minecraft.ts";
 
 export async function launchMinecraft({
@@ -20,26 +22,17 @@ export async function launchMinecraft({
 
     const instance = path.join(root, "instances", config.name);
 
-    const args = [];
-
-    args.push("--username", "far1sh");
-    args.push("--version", config.version);
-    args.push("--gameDir", instance);
-    args.push("--assetsDir", path.join(root, "assets"));
-
     const meta = (await Bun.file(
       path.join(instance, `${config.name}.json`),
     ).json()) as MinecraftVersion;
 
-    args.push("--assetIndex", meta.assetIndex.id);
-    args.push("--uuid", "f0ae8739-0655-419c-8e5a-a1f1222e6804");
-    args.push("--accessToken", "0");
-
     const libs = meta.libraries.filter((item) => librariesRule(item.rules));
 
-    const classpathEntries = libs
-      .filter((item) => item.downloads?.artifact?.path)
-      .map((item) => path.join(root, "libraries", item.downloads!.artifact!.path!));
+    const classpathEntries: string[] = [];
+    for (const lib of libs) {
+      const artifactPath = lib.downloads?.artifact?.path;
+      if (artifactPath) classpathEntries.push(path.join(root, "libraries", artifactPath));
+    }
 
     classpathEntries.push(path.join(instance, `${meta.id}.jar`));
 
@@ -47,27 +40,94 @@ export async function launchMinecraft({
 
     const natives = path.join(root, "natives", config.version);
 
-    const jvmArgs = [
+    // 兜底解压原生库（install 已处理则跳过）
+    await ensureNatives({ root, version: config.version, meta });
+
+    const context: Record<string, string> = {
+      auth_player_name: "far1sh",
+      version_name: config.name,
+      game_directory: instance,
+      assets_root: path.join(root, "assets"),
+      assets_index_name: meta.assetIndex.id,
+      auth_uuid: "f0ae8739-0655-419c-8e5a-a1f1222e6804",
+      auth_access_token: "0",
+      auth_session: "legacy",
+      user_type: "msa",
+      user_properties: "{}",
+      version_type: meta.type,
+      clientid: "",
+      auth_xuid: "",
+      natives_directory: path.join(natives, "java"),
+      launcher_name: "Aurora Craft",
+      launcher_version: import.meta.env.APP_VERSION,
+      classpath,
+      library_directory: path.join(root, "libraries"),
+      classpath_separator: path.delimiter,
+      resolution_width: "854",
+      resolution_height: "480",
+    };
+
+    const jvmArgs: string[] = [
       "-Xmx4G",
       "-XX:+UseCompactObjectHeaders",
       "-XX:+AlwaysPreTouch",
       "-XX:+UseStringDeduplication",
-      "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump",
       "-XX:StackShadowPages=32",
       "--enable-native-access=ALL-UNNAMED",
       "--add-exports",
       "java.base/jdk.internal.misc=ALL-UNNAMED",
-      `-Djava.library.path=${natives}/java`,
-      `-Djna.tmpdir=${natives}/jna`,
-      `-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives}/lwjgl`,
-      `-Dio.netty.native.workdir=${natives}/netty`,
-      "-Dminecraft.launcher.brand=Aurora Craft",
-      `-Dminecraft.launcher.version=${import.meta.env.APP_VERSION}`,
-      "-cp",
-      classpath,
-      meta.mainClass,
-      ...args,
+      `-Djna.tmpdir=${path.join(natives, "jna")}`,
+      `-Dorg.lwjgl.system.SharedLibraryExtractPath=${path.join(natives, "lwjgl")}`,
+      `-Dio.netty.native.workdir=${path.join(natives, "netty")}`,
     ];
+
+    const gameArgs: string[] = [];
+
+    const baseGameArgs: string[] = [
+      "--username",
+      "far1sh",
+      "--version",
+      config.name,
+      "--gameDir",
+      instance,
+      "--assetsDir",
+      path.join(root, "assets"),
+      "--assetIndex",
+      meta.assetIndex.id,
+      "--uuid",
+      "f0ae8739-0655-419c-8e5a-a1f1222e6804",
+      "--accessToken",
+      "0",
+      "--userType",
+      "msa",
+      "--versionType",
+      meta.type,
+    ];
+
+    if (meta.arguments) {
+      jvmArgs.push(...collectArguments(meta.arguments.jvm, context));
+      gameArgs.push(...collectArguments(meta.arguments.game, context));
+    } else {
+      // 1.13 之前无 arguments 字段，手动拼装
+      jvmArgs.push(
+        `-Djava.library.path=${path.join(natives, "java")}`,
+        "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump",
+        "-Dminecraft.launcher.brand=Aurora Craft",
+        `-Dminecraft.launcher.version=${import.meta.env.APP_VERSION}`,
+      );
+
+      gameArgs.push(...baseGameArgs);
+    }
+
+    // 部分早期 manifest 缺少 -cp / java.library.path
+    if (!jvmArgs.includes("-cp")) {
+      jvmArgs.push("-cp", classpath);
+    }
+    if (!jvmArgs.some((arg) => arg.startsWith("-Djava.library.path="))) {
+      jvmArgs.push(`-Djava.library.path=${path.join(natives, "java")}`);
+    }
+
+    jvmArgs.push(meta.mainClass, ...gameArgs);
 
     const child = spawn("javaw", jvmArgs, {
       cwd: instance,

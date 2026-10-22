@@ -1,4 +1,15 @@
+import ky from "ky";
 import type { EventProc, MutationProc, QueryProc } from "mirinjs/rpc";
+
+export const http = ky.create({
+  timeout: 15_000,
+  fetch: (input: Request, init: RequestInit | undefined) => {
+    return fetch(input, {
+      ...init,
+      proxy: "http://127.0.0.1:10808",
+    });
+  },
+});
 
 export type QueryInput<T> = T extends QueryProc<infer TInput, infer _TOutput> ? TInput : never;
 

@@ -1,14 +1,15 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import ky from "ky";
 import { app, logger } from "mirinjs";
 import { stringify } from "smol-toml";
 import type { InstallController } from "~/controllers/install.ts";
 import { RESOURCES } from "~/lib/config.ts";
 import { download, runWithConcurrency } from "~/lib/download.ts";
 import type { MutationInput } from "~/lib/utils.ts";
-import { platform } from "~/lib/utils.ts";
+import { http, platform } from "~/lib/utils.ts";
 import { librariesRule } from "~/service/library.ts";
+import { applyLoader, isMetaLoader } from "~/service/loader.ts";
+import { ensureNatives } from "~/service/natives.ts";
 import type { InstanceConfig } from "~/types/instance.ts";
 import type { DownloadArtifact, MinecraftAssetIndex, MinecraftVersion } from "~/types/minecraft.ts";
 
@@ -19,7 +20,7 @@ export async function installMinecraft({
 }): Promise<boolean> {
   const log = logger.child("install").child("minecraft").child(options.name);
 
-  let lastReportTime = 0;
+  // const lastReportTime = 0;
   const reportProgress = (
     _options: {
       detail: string;
@@ -27,17 +28,8 @@ export async function installMinecraft({
       expand?: string;
     },
     status: "running" | "done" | "error" = "running",
-    force = false,
   ): void => {
     if (!options.taskId) return;
-
-    const now = performance.now();
-
-    if (!force && status === "running" && now - lastReportTime < 10) {
-      return;
-    }
-
-    lastReportTime = now;
 
     app.rpc["event.task"]?.broadcast({
       id: options.taskId,
@@ -56,9 +48,8 @@ export async function installMinecraft({
         progress: 0,
       },
       "running",
-      true,
     );
-    const meta = await ky(options.url).json<MinecraftVersion>();
+    const meta = await http(options.url).json<MinecraftVersion>();
 
     const instance = path.join(root, "instances", options.name);
 
@@ -83,6 +74,19 @@ export async function installMinecraft({
       log.info(`save manifest: ${manifest}`);
     }
 
+    // 注入加载器（须在 cores manifest 写盘后，避免污染共享 cores）
+    if (isMetaLoader(options.loader)) {
+      reportProgress(
+        {
+          detail: "正在配置模组加载器",
+          progress: 0,
+        },
+        "running",
+      );
+      await applyLoader({ meta, loader: options.loader });
+      log.info(`loader applied: ${options.loader.type}`);
+    }
+
     // 安装核心
     reportProgress(
       {
@@ -90,7 +94,6 @@ export async function installMinecraft({
         progress: 0,
       },
       "running",
-      true,
     );
     const core = path.join(root, "cores", meta.id, `${meta.id}.jar`);
     await (async () => {
@@ -112,7 +115,6 @@ export async function installMinecraft({
                 expand: speedPerSecond,
               },
               "running",
-              true,
             );
           },
         });
@@ -133,7 +135,6 @@ export async function installMinecraft({
           progress: 100,
         },
         "running",
-        true,
       );
     })();
 
@@ -144,7 +145,6 @@ export async function installMinecraft({
         progress: 0,
       },
       "running",
-      true,
     );
     const libraries = path.join(root, "libraries");
     await (async () => {
@@ -169,7 +169,7 @@ export async function installMinecraft({
           let classifierKey = lib.natives[currentPlatform];
           if (classifierKey) {
             const arch = process.arch === "x64" || process.arch === "arm64" ? "64" : "32";
-            // biome-ignore lint/suspicious/noTemplateCurlyInString: <explanation>
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: manifest 用 ${arch} 占位符，需要手动替换
             classifierKey = classifierKey.replace("${arch}", arch);
 
             const classifierArtifact = lib.downloads.classifiers[classifierKey];
@@ -209,7 +209,6 @@ export async function installMinecraft({
                 progress: percent,
               },
               "running",
-              true,
             );
             return;
           }
@@ -231,7 +230,6 @@ export async function installMinecraft({
             progress: percent,
           },
           "running",
-          true,
         );
         log.info(`download libraries ${completed}/${total} ${name}`);
       });
@@ -242,9 +240,26 @@ export async function installMinecraft({
           progress: 100,
         },
         "running",
-        true,
       );
     })();
+
+    // 解压旧版原生库（现代版本交由 LWJGL 自解压）
+    await ensureNatives({
+      root,
+      version: meta.id,
+      meta,
+      onProgress: ({ done, total, name }: { done: number; total: number; name: string }) => {
+        reportProgress(
+          {
+            detail: "正在解压原生库",
+            expand: `${done}/${total}`,
+            progress: total > 0 ? (done / total) * 100 : 100,
+          },
+          "running",
+        );
+        log.info(`extract natives ${done}/${total} ${name}`);
+      },
+    });
 
     // 安装资源文件
     reportProgress(
@@ -253,7 +268,6 @@ export async function installMinecraft({
         progress: 0,
       },
       "running",
-      true,
     );
     const assets = path.join(root, "assets");
     await (async () => {
@@ -269,7 +283,7 @@ export async function installMinecraft({
       let assetsIndex: MinecraftAssetIndex;
 
       if (!(await Bun.file(index).exists())) {
-        assetsIndex = await ky(meta.assetIndex.url).json<MinecraftAssetIndex>();
+        assetsIndex = await http(meta.assetIndex.url).json<MinecraftAssetIndex>();
         await Bun.write(index, JSON.stringify(assetsIndex, null, 2));
         log.info(`save assets index: ${index}`);
       } else {
@@ -303,7 +317,6 @@ export async function installMinecraft({
                 progress: percent,
               },
               "running",
-              true,
             );
             return;
           }
@@ -327,7 +340,6 @@ export async function installMinecraft({
             progress: percent,
           },
           "running",
-          true,
         );
         log.info(`download assets ${completed}/${total} ${name}`);
       });
@@ -338,7 +350,6 @@ export async function installMinecraft({
           progress: 100,
         },
         "running",
-        true,
       );
     })();
 
@@ -349,7 +360,6 @@ export async function installMinecraft({
         progress: 100,
       },
       "running",
-      true,
     );
     await (async () => {
       await fs.symlink(core, path.join(instance, `${options.name}.jar`));
@@ -374,7 +384,6 @@ export async function installMinecraft({
         progress: 100,
       },
       "done",
-      true,
     );
     log.info("done");
 
@@ -388,7 +397,6 @@ export async function installMinecraft({
         progress: 100,
       },
       "error",
-      true,
     );
     throw error;
   }

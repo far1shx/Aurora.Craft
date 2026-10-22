@@ -1,10 +1,12 @@
 import { IconBolt, IconBooks, IconDeviceGamepad } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { type ChangeEvent, type JSX, useEffect, useState } from "react";
 import { useSnapshot } from "valtio/react";
 import { Button } from "@/components/ui/button.tsx";
 import { Command, CommandDialog, CommandGroup, CommandList } from "@/components/ui/command.tsx";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group.tsx";
+import { ScrollArea } from "@/components/ui/scroll-area.tsx";
 import {
   Select,
   SelectContent,
@@ -49,11 +51,28 @@ export function GameCommand({
     }));
   }, [open.item]);
 
+  const loaderType = config.loader.type;
+  const isMetaLoader = loaderType === "fabric" || loaderType === "quilt";
+  const isInstallerLoader = loaderType === "forge" || loaderType === "neoforge";
+  const mcVersion = open.item?.id ?? "";
+
+  const loaderVersions = useQuery({
+    queryKey: ["install:loaderVersions", loaderType, mcVersion],
+    queryFn: () =>
+      api.install.getLoaderVersions({
+        loader: { type: loaderType as "fabric" | "quilt", version: "" },
+        mcVersion,
+      }),
+    enabled: isMetaLoader && mcVersion.length > 0,
+  });
+
+  const latestLoaderVersion = loaderVersions.data?.[0];
+
   return (
     <CommandDialog
       open={open.show}
       onOpenChange={() => onOpenChange({ item: null, show: false })}
-      className="h-70"
+      className="h-80"
     >
       <Command>
         <div className="flex h-9 items-center px-1 py-1">
@@ -77,7 +96,7 @@ export function GameCommand({
               />
             </InputGroup>
 
-            <div className="relative w-full mb-2">
+            <div className="mb-2 flex flex-col gap-2">
               <Select
                 value={config.loader.type}
                 onValueChange={(value: typeof config.loader.type | null) => {
@@ -85,13 +104,7 @@ export function GameCommand({
 
                   setConfig((prev) => ({
                     ...prev,
-                    loader:
-                      value === "none"
-                        ? { type: "none" }
-                        : {
-                            type: value,
-                            version: prev.loader.type === "none" ? "" : prev.loader.version,
-                          },
+                    loader: value === "none" ? { type: "none" } : { type: value, version: "" },
                   }));
                 }}
               >
@@ -131,28 +144,67 @@ export function GameCommand({
                 </SelectContent>
               </Select>
 
-              <AnimatePresence>
-                {config.loader.type !== "none" && (
+              <AnimatePresence initial={false}>
+                {isMetaLoader && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 24,
-                      mass: 0.7,
-                    }}
-                    style={{ transformOrigin: "center" }}
-                    className="absolute right-5 top-0.5 z-10 text-muted-foreground"
+                    key="loader-version"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
                   >
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="z-10 text-muted-foreground bg-transparent!"
+                    <Select
+                      value={config.loader.version ?? ""}
+                      onValueChange={(value: string | null) => {
+                        if (value === null) return;
+
+                        setConfig((prev) =>
+                          prev.loader.type === "none"
+                            ? prev
+                            : { ...prev, loader: { type: prev.loader.type, version: value } },
+                        );
+                      }}
                     >
-                      1.0.5
-                    </Button>
+                      <SelectTrigger className="w-full">
+                        <SelectValue
+                          placeholder={
+                            loaderVersions.isLoading
+                              ? "正在获取加载器版本…"
+                              : latestLoaderVersion
+                                ? `最新版本 (${latestLoaderVersion})`
+                                : "最新版本"
+                          }
+                        />
+                      </SelectTrigger>
+
+                      <SelectContent alignItemWithTrigger={false}>
+                        <SelectGroup>
+                          <ScrollArea className="h-42">
+                            {(loaderVersions.data ?? []).map((version: string) => (
+                              <SelectItem key={version} value={version}>
+                                {version}
+                              </SelectItem>
+                            ))}
+                          </ScrollArea>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </motion.div>
+                )}
+
+                {isInstallerLoader && (
+                  <motion.div
+                    key="loader-note"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <p className="px-3 text-xs text-muted-foreground">
+                      Forge / NeoForge 需运行官方安装器，暂未接入自动安装
+                    </p>
                   </motion.div>
                 )}
               </AnimatePresence>

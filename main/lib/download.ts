@@ -1,9 +1,8 @@
 import { mkdir, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { KyInstance, Progress } from "ky";
-import ky from "ky";
 import { logger } from "mirinjs";
-import { formatSpeed } from "~/lib/utils.ts";
+import { formatSpeed, http } from "~/lib/utils.ts";
 
 export interface DownloadProgress {
   transferredBytes: number;
@@ -33,7 +32,7 @@ export async function download(
   const {
     onProgress,
     timeout = false,
-    ky: kyInstance = ky,
+    ky: kyInstance = http,
     logger: log = logger.child("download"),
   } = options;
 
@@ -201,7 +200,5 @@ export async function runWithConcurrency<T>(
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker()),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => runWorker()));
 }
