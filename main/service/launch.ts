@@ -28,8 +28,13 @@ export async function launchMinecraft({
 
     const libs = meta.libraries.filter((item) => librariesRule(item.rules));
 
+    // NeoForge 的 universal 由 FML 经 libraryDirectory 加载，进 classpath 会让它误判为分离配置；
+    // Forge 的 universal 是必需 classpath 条目，不能排除
+    const skipUniversal = config.loader.type === "neoforge";
+
     const classpathEntries: string[] = [];
     for (const lib of libs) {
+      if (skipUniversal && lib.name?.endsWith(":universal")) continue;
       const artifactPath = lib.downloads?.artifact?.path;
       if (artifactPath) classpathEntries.push(path.join(root, "libraries", artifactPath));
     }

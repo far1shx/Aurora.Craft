@@ -7,9 +7,11 @@ import { RESOURCES } from "~/lib/config.ts";
 import { download, runWithConcurrency } from "~/lib/download.ts";
 import type { MutationInput } from "~/lib/utils.ts";
 import { http, platform } from "~/lib/utils.ts";
+import { installForge } from "~/service/forge.ts";
 import { librariesRule } from "~/service/library.ts";
 import { applyLoader, isMetaLoader } from "~/service/loader.ts";
 import { ensureNatives } from "~/service/natives.ts";
+import { installNeoforge } from "~/service/neoforge.ts";
 import type { InstanceConfig } from "~/types/instance.ts";
 import type { DownloadArtifact, MinecraftAssetIndex, MinecraftVersion } from "~/types/minecraft.ts";
 
@@ -103,11 +105,9 @@ export async function installMinecraft({
       fs.mkdir(path.join(instance), { recursive: true }),
     ]);
 
-    // 查看是否有同名实例 (保险)
-    if ((await fs.readdir(instance)).length > 0) {
-      log.error("instance exists");
-      return false;
-    }
+    // 清空同名实例残留（UI 层已用 instance.check 拦截真正的重复，这里兜底自愈失败重装）
+    await fs.rm(instance, { recursive: true, force: true });
+    await fs.mkdir(instance, { recursive: true });
 
     // 保存游戏元数据
     const manifest = path.join(root, "cores", meta.id, `${meta.id}.json`);
@@ -181,6 +181,37 @@ export async function installMinecraft({
         "running",
       );
     })();
+
+    // NeoForge / Forge：在 vanilla 依赖库之前跑（需原版 jar 已就位），产物合并进 libraries
+    if (options.loader.type === "neoforge" || options.loader.type === "forge") {
+      const loaderName = options.loader.type === "neoforge" ? "NeoForge" : "Forge";
+      reportProgress(
+        {
+          detail: `正在安装 ${loaderName}`,
+          progress: 0,
+        },
+        "running",
+      );
+
+      if (options.loader.type === "neoforge") {
+        await installNeoforge({
+          options: options as typeof options & { loader: { type: "neoforge"; version: string } },
+          meta,
+          root,
+          reportProgress,
+        });
+      } else {
+        await installForge({
+          options: options as typeof options & { loader: { type: "forge"; version: string } },
+          meta,
+          root,
+          reportProgress,
+        });
+      }
+
+      resolvedLoader = options.loader;
+      log.info(`${options.loader.type} applied: ${resolvedLoader.type} ${resolvedLoader.version}`);
+    }
 
     // 安装依赖库
     reportProgress(
@@ -406,12 +437,22 @@ export async function installMinecraft({
       "running",
     );
     await (async () => {
-      await fs.symlink(core, path.join(instance, `${options.name}.jar`));
+      // symlink：vanilla/fabric/quilt/neoforge 都指向原版 core。
+      // neoforge 的 patched jar 由 FML 经 -DlibraryDirectory + --fml.mcVersion 定位，不进 classpath；
+      // 这样 detectProduction 能读到原版 SharedConstants（无 NeoForge 引用），判定为生产环境。
+      const coreLink = core;
+
+      const instanceJar = path.join(instance, `${options.name}.jar`);
+      await fs.rm(instanceJar, { force: true }).catch(() => {});
+      await fs.symlink(coreLink, instanceJar);
 
       meta.inheritsFrom = meta.id;
       meta.id = options.name;
 
-      await Bun.write(path.join(instance, `${meta.id}.json`), JSON.stringify(meta, null, 2));
+      // neoforge/forge 的实例 json 已由各自 installer 写为合并后的 manifest，这里不覆盖
+      if (options.loader.type !== "neoforge" && options.loader.type !== "forge") {
+        await Bun.write(path.join(instance, `${meta.id}.json`), JSON.stringify(meta, null, 2));
+      }
       await Bun.write(
         path.join(instance, "ac.config.toml"),
         stringify({

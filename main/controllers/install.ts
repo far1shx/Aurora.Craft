@@ -2,7 +2,12 @@ import { rpc } from "mirinjs/rpc";
 import { VERSION_MANIFEST } from "~/lib/config.ts";
 import { http } from "~/lib/utils.ts";
 import { installMinecraft } from "~/service/install.ts";
-import { type MetaLoader, listLoaderVersions } from "~/service/loader.ts";
+import {
+  type MetaLoader,
+  listForgeVersions,
+  listLoaderVersions,
+  listNeoforgeVersions,
+} from "~/service/loader.ts";
 import type { Loader } from "~/types/instance.ts";
 
 export const installController = rpc.router({
@@ -37,8 +42,18 @@ export const installController = rpc.router({
     }): ReturnType<typeof installMinecraft> => installMinecraft({ options }),
   ),
   getLoaderVersions: rpc.query(
-    async (options: { loader: MetaLoader; mcVersion: string }) =>
-      await listLoaderVersions(options.loader, options.mcVersion),
+    async (options: {
+      loader: MetaLoader | { type: "neoforge" } | { type: "forge" };
+      mcVersion: string;
+    }) => {
+      if (options.loader.type === "neoforge") {
+        return await listNeoforgeVersions(options.mcVersion);
+      }
+      if (options.loader.type === "forge") {
+        return await listForgeVersions(options.mcVersion);
+      }
+      return await listLoaderVersions(options.loader as MetaLoader, options.mcVersion);
+    },
   ),
 });
 
