@@ -6,12 +6,12 @@ import {
   NEOFORGE_MAVEN,
   NEOFORGE_VERSIONS_API,
   QUILT_META,
+  mirrorUrl,
 } from "~/lib/config.ts";
 import { http } from "~/lib/utils.ts";
 import type { Loader } from "~/types/instance.ts";
 import type { MinecraftLibrary, MinecraftVersion } from "~/types/minecraft.ts";
 
-// Quilt Meta 要求可识别的 User-Agent
 const LOADER_HEADERS = { "User-Agent": "Aurora.Craft" } as const;
 
 export type MetaLoader = {
@@ -93,7 +93,7 @@ function toDownloadLibrary(lib: MavenLibrary): MinecraftLibrary | null {
 // intermediary / loader 等条目缺 sha1，从 maven 补齐以命中缓存
 async function resolveSha1(url: string): Promise<string> {
   try {
-    const text = await http(`${url}.sha1`, { headers: LOADER_HEADERS }).text();
+    const text = await http(`${mirrorUrl(url)}.sha1`, { headers: LOADER_HEADERS }).text();
     return text.trim().split(/\s+/)[0] ?? "";
   } catch {
     return "";
