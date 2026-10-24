@@ -1,16 +1,20 @@
 import * as path from "node:path";
 import envPaths from "env-paths";
-import { rpc } from "mirinjs/rpc";
 import { parse, stringify } from "smol-toml";
-import appConfig from "../../mirin.config.ts";
 
 const config = path.join(
-  envPaths(appConfig.name, { suffix: "" }).config.replace(/[\\/]Config$/, ""),
+  envPaths("aurora.craft", { suffix: "" }).config.replace(/[\\/]Config$/, ""),
   "config",
 );
 
-export const configController = rpc.router({
-  get: rpc.mutation(async ({ name, root = config }: { name: string; root?: string }) => {
+export const configController = {
+  "config.get": async ({
+    name,
+    root = config,
+  }: {
+    name: string;
+    root?: string;
+  }): Promise<Record<string, unknown>> => {
     const file = Bun.file(path.join(root, `${name}.toml`));
 
     if (!(await file.exists())) {
@@ -22,21 +26,19 @@ export const configController = rpc.router({
     } catch {
       return {};
     }
-  }),
-  set: rpc.mutation(
-    async ({
-      name,
-      data,
-      root = config,
-    }: {
-      name: string;
-      data: Record<string, unknown>;
-      root?: string;
-    }) => {
-      const destination = path.join(root, `${name}.toml`);
-      await Bun.write(destination, stringify(data));
-    },
-  ),
-});
+  },
+  "config.set": async ({
+    name,
+    data,
+    root = config,
+  }: {
+    name: string;
+    data: Record<string, unknown>;
+    root?: string;
+  }): Promise<void> => {
+    const destination = path.join(root, `${name}.toml`);
+    await Bun.write(destination, stringify(data));
+  },
+};
 
 export type ConfigController = typeof configController;

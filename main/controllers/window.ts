@@ -1,13 +1,12 @@
-import { type WindowHandle, app } from "mirinjs";
-import { rpc } from "mirinjs/rpc";
+import { mainWindow } from "~/lib/window.ts";
 
-function callerWindow(webview: number): WindowHandle | undefined {
-  return app.windows.byId(webview);
-}
-
-export const windowController = rpc.router({
-  min: rpc.mutation((_: null, ctx) => callerWindow(ctx.webview)?.minimize()),
-  close: rpc.mutation((_: null) => app.quit()),
-});
+export const windowController = {
+  "window.min": (_: null): void => {
+    mainWindow()?.minimize();
+  },
+  "window.close": (_: null): void => {
+    mainWindow()?.close();
+  },
+};
 
 export type WindowController = typeof windowController;

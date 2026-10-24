@@ -209,8 +209,9 @@ function Toaster({
   );
 }
 
-const createToastManager = ToastPrimitive.createToastManager;
-const useToastManager = ToastPrimitive.useToastManager;
+const createToastManager: typeof ToastPrimitive.createToastManager =
+  ToastPrimitive.createToastManager;
+const useToastManager: typeof ToastPrimitive.useToastManager = ToastPrimitive.useToastManager;
 
 export {
   Toast,

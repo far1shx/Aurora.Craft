@@ -39,7 +39,7 @@ export const Meteors: FC<MeteorsProps> = ({
     <>
       {[...meteorStyles].map((style, idx) => (
         <span
-          // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
+          // biome-ignore lint/suspicious/noArrayIndexKey: 流星动画元素无稳定唯一标识，用索引作 key 是安全的
           key={idx}
           style={{ ...style }}
           className={cn(

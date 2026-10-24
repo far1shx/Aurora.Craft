@@ -25,7 +25,7 @@ function InstanceItem({
   onClick: () => void;
 }): JSX.Element {
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
+    // biome-ignore lint/a11y/noStaticElementInteractions: 实例列表项点击触发启动，已配套 onKeyDown 处理键盘交互
     <div
       className="w-full h-full px-3.5 flex items-center justify-between rounded-lg text-left hover:bg-background dark:hover:bg-muted/50 transition-colors group"
       onClick={onClick}
@@ -45,7 +45,10 @@ function InstanceItem({
 
         <div className="flex flex-col">
           <span className="font-bold text-sm">{item.name}</span>
-          <span className="text-xs text-muted-foreground">{item.version}</span>
+          <span className="text-xs text-muted-foreground">
+            {item.version}{" "}
+            {item.loader.type !== "none" && `| ${item.loader.type}.${item.loader.version}`}
+          </span>
         </div>
       </div>
 
@@ -60,7 +63,7 @@ export function InstancePage(): JSX.Element {
   const settings = useSnapshot(settingsConfig);
 
   const [search, setSearch] = useState("");
-  const [library, setLibrary] = useState<string | null>(defaultLibrary);
+  const [library, setLibrary] = useState(defaultLibrary);
 
   useEffect(() => {
     void instanceStore.refresh();
@@ -86,7 +89,7 @@ export function InstancePage(): JSX.Element {
             value,
           }))}
           value={library}
-          onValueChange={(value: string | null) => setLibrary(value)}
+          onValueChange={(value: string | null) => setLibrary(value || defaultLibrary)}
         >
           <SelectTrigger className="max-w-75 h-9">
             <IconBooks className="size-4 shrink-0 text-muted-foreground" />

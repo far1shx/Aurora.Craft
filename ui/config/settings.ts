@@ -8,6 +8,11 @@ export const settingsConfig = proxy<{
   java: { version: string; path: string }[];
   agreement: boolean;
   error_collection: boolean;
+  last_startup: {
+    library: string;
+    name: string;
+    meta: string;
+  } | null;
   navigation: {
     show: boolean;
     permanent: boolean;
@@ -24,6 +29,7 @@ export const settingsConfig = proxy<{
   java: [],
   agreement: false,
   error_collection: true,
+  last_startup: null,
   navigation: {
     show: true,
     permanent: false,

@@ -3,7 +3,7 @@ import { settingsConfig } from "@/config/settings.ts";
 export { cn } from "cn";
 export const version: string | undefined = import.meta.env.APP_VERSION;
 export const isBeta = version.split("-")[1] === "beta";
-export const defaultLibrary: string = settingsConfig.library[0]!;
+export const defaultLibrary: string = settingsConfig.library[0] ?? "";
 
 // 实例名会直接拼进文件系统路径，且不允许空格（空格会被 Windows 尾随截断规则干扰）
 const INSTANCE_NAME_MAX = 64;

@@ -1,9 +1,9 @@
-import { mergeProps } from "@base-ui/react/merge-props"
-import { useRender } from "@base-ui/react/use-render"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
+import { type VariantProps, cva } from "class-variance-authority";
+import { cn } from "cn";
 
-import { Separator } from "@/components/ui/separator"
+import { Separator } from "@/components/ui/separator";
 
 const buttonGroupVariants = cva(
   "flex w-fit items-stretch *:focus-visible:relative *:focus-visible:z-10 has-[>[data-slot=button-group]]:gap-2 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-lg [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1",
@@ -19,15 +19,16 @@ const buttonGroupVariants = cva(
     defaultVariants: {
       orientation: "horizontal",
     },
-  }
-)
+  },
+);
 
 function ButtonGroup({
   className,
   orientation,
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>) {
+}: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>): React.JSX.Element {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: shadcn 生成的按钮组组件，div+role 用于样式控制
     <div
       role="group"
       data-slot="button-group"
@@ -35,53 +36,48 @@ function ButtonGroup({
       className={cn(buttonGroupVariants({ orientation }), className)}
       {...props}
     />
-  )
+  );
 }
 
 function ButtonGroupText({
   className,
   render,
   ...props
-}: useRender.ComponentProps<"div">) {
+}: useRender.ComponentProps<"div">): React.JSX.Element {
   return useRender({
     defaultTagName: "div",
     props: mergeProps<"div">(
       {
         className: cn(
           "flex items-center gap-2 rounded-lg border bg-muted px-2.5 text-sm font-medium [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
-          className
+          className,
         ),
       },
-      props
+      props,
     ),
     render,
     state: {
       slot: "button-group-text",
     },
-  })
+  });
 }
 
 function ButtonGroupSeparator({
   className,
   orientation = "vertical",
   ...props
-}: React.ComponentProps<typeof Separator>) {
+}: React.ComponentProps<typeof Separator>): React.JSX.Element {
   return (
     <Separator
       data-slot="button-group-separator"
       orientation={orientation}
       className={cn(
         "relative self-stretch bg-input data-horizontal:mx-px data-horizontal:w-auto data-vertical:my-px data-vertical:h-auto",
-        className
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
-export {
-  ButtonGroup,
-  ButtonGroupSeparator,
-  ButtonGroupText,
-  buttonGroupVariants,
-}
+export { ButtonGroup, ButtonGroupSeparator, ButtonGroupText, buttonGroupVariants };

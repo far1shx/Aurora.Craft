@@ -44,7 +44,7 @@ export function Tabs({ items, defaultValue, onChange, className }: TabsProps): J
       role="tablist"
       onMouseLeave={() => setHoverValue(null)}
       className={cn(
-        "relative flex items-center h-9 p-1 gap-1 border bg-background dark:bg-[#151515] mblur:bg-background/80 mblur:dark:bg-input/30 backdrop-blur-xs rounded-lg overflow-hidden w-fit",
+        "relative flex items-center h-9 p-1 gap-1 border bg-background dark:bg-[#151515] backdrop-blur-xs rounded-lg overflow-hidden w-fit",
         className,
       )}
     >

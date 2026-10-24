@@ -1,12 +1,12 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { app, logger } from "mirinjs";
 import { stringify } from "smol-toml";
-import type { InstallController } from "~/controllers/install.ts";
 import { RESOURCES } from "~/lib/config.ts";
 import { download, runWithConcurrency } from "~/lib/download.ts";
-import type { MutationInput } from "~/lib/utils.ts";
+import { createLogger } from "~/lib/logger.ts";
+import type { AppRPC } from "~/lib/rpc-schema.ts";
 import { http, platform } from "~/lib/utils.ts";
+import { rpc } from "~/main.ts";
 import { installForge } from "~/service/forge.ts";
 import { librariesRule } from "~/service/library.ts";
 import { applyLoader, isMetaLoader } from "~/service/loader.ts";
@@ -15,12 +15,14 @@ import { installNeoforge } from "~/service/neoforge.ts";
 import type { InstanceConfig } from "~/types/instance.ts";
 import type { DownloadArtifact, MinecraftAssetIndex, MinecraftVersion } from "~/types/minecraft.ts";
 
+type InstallMinecraftOptions = AppRPC["bun"]["requests"]["install.installMinecraft"]["params"];
+
 export async function installMinecraft({
   options,
 }: {
-  options: MutationInput<InstallController["routes"]["installMinecraft"]>;
+  options: InstallMinecraftOptions;
 }): Promise<boolean> {
-  const log = logger.child("install").child("minecraft").child(options.name);
+  const log = createLogger("install", "minecraft", options.name);
 
   const REPORT_INTERVAL = 100;
 
@@ -41,7 +43,7 @@ export async function installMinecraft({
 
     if (!pending || !options.taskId) return;
 
-    app.rpc["event.task"]?.broadcast({
+    rpc.send["event.task"]({
       id: options.taskId,
       status: pending.status,
       progress: Math.min(100, Math.max(0, Math.round(pending.progress))),
@@ -142,26 +144,31 @@ export async function installMinecraft({
     const core = path.join(root, "cores", meta.id, `${meta.id}.jar`);
     await (async () => {
       const downloadCore: () => Promise<void> = () =>
-        download(meta.downloads.client!.url, core, {
-          logger: log,
-          onProgress: ({
-            percent,
-            speedPerSecond,
-          }: {
-            percent: number;
-            speedPerSecond: string;
-          }) => {
-            log.info(`download core: ${percent.toFixed(2)}% speed ${speedPerSecond}`);
-            reportProgress(
-              {
-                detail: "正在下载核心",
-                progress: percent,
-                expand: speedPerSecond,
-              },
-              "running",
-            );
+        download(
+          // biome-ignore lint/style/noNonNullAssertion: 下方 sha1 校验已验证 client 存在，此处必然非空
+          meta.downloads.client!.url,
+          core,
+          {
+            logger: log,
+            onProgress: ({
+              percent,
+              speedPerSecond,
+            }: {
+              percent: number;
+              speedPerSecond: string;
+            }) => {
+              log.info(`download core: ${percent.toFixed(2)}% speed ${speedPerSecond}`);
+              reportProgress(
+                {
+                  detail: "正在下载核心",
+                  progress: percent,
+                  expand: speedPerSecond,
+                },
+                "running",
+              );
+            },
           },
-        });
+        );
 
       if (!(await Bun.file(core).exists())) await downloadCore();
 
@@ -263,7 +270,7 @@ export async function installMinecraft({
 
       await runWithConcurrency(tasks, 16, async (task) => {
         const { artifact, name } = task;
-        const destination = path.join(libraries, artifact.path!);
+        const destination = path.join(libraries, artifact.path ?? "");
 
         await fs.mkdir(path.dirname(destination), { recursive: true });
 
@@ -457,7 +464,7 @@ export async function installMinecraft({
         path.join(instance, "ac.config.toml"),
         stringify({
           name: options.name,
-          version: new URL(options.url).pathname.split("/").pop()!.replace(".json", ""),
+          version: new URL(options.url).pathname.split("/").pop()?.replace(".json", ""),
           loader: resolvedLoader,
         } as InstanceConfig),
       );
@@ -483,6 +490,11 @@ export async function installMinecraft({
       },
       "error",
     );
+    rpc.send["event.toast"]({
+      title: "安装失败",
+      description: errorMsg,
+      type: "error",
+    });
     throw error;
   }
 }

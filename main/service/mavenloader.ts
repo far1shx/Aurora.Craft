@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { logger } from "mirinjs";
 import { download, runWithConcurrency } from "~/lib/download.ts";
+import type { Logger } from "~/lib/logger.ts";
 
 // Forge 与 NeoForge 共用 installer 骨架：install_profile.json + processors + 离线安装
 
@@ -44,7 +44,7 @@ export async function runOfflineInstaller({
 }: {
   installerJar: string;
   root: string;
-  log: ReturnType<typeof logger.child>;
+  log: Logger;
   installClientFlag?: string;
 }): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -67,7 +67,7 @@ export async function runOfflineInstaller({
 export async function readInstallerEntry<T>(
   installerJar: string,
   entry: string,
-  log: ReturnType<typeof logger.child>,
+  log: Logger,
 ): Promise<T> {
   const bytes = await Bun.file(installerJar).bytes();
   const { unzipSync } = await import("fflate");
@@ -90,7 +90,7 @@ export async function predownloadLibraries({
 }: {
   artifacts: MavenArtifact[];
   libraries: string;
-  log: ReturnType<typeof logger.child>;
+  log: Logger;
   reportProgress: ProgressReporter;
   detail: string;
 }): Promise<void> {

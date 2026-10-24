@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { logger } from "mirinjs";
 import { download } from "~/lib/download.ts";
+import { createLogger } from "~/lib/logger.ts";
 import { getNeoforgeInstallerUrl, listNeoforgeVersions } from "~/service/loader.ts";
 import {
   type InstallProfile,
@@ -48,7 +48,7 @@ export async function installNeoforge({
   root: string;
   reportProgress: ProgressReporter;
 }): Promise<void> {
-  const log = logger.child("install").child("neoforge").child(options.name);
+  const log = createLogger("install", "neoforge", options.name);
   const libraries = path.join(root, "libraries");
   const instance = path.join(root, "instances", options.name);
 

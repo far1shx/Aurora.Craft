@@ -25,7 +25,10 @@ function TaskSheet(): JSX.Element {
             variant="ghost"
             size="icon-sm"
             className="absolute top-2 right-10"
-            onClick={task.clean}
+            onClick={() => {
+              task.clean();
+              task.sheet.open = false;
+            }}
           >
             <IconTrash />
           </Button>

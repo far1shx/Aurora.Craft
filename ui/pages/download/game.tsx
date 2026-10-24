@@ -18,7 +18,7 @@ function VersionItem({
   onClick: () => void;
 }): JSX.Element {
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
+    // biome-ignore lint/a11y/noStaticElementInteractions: 版本列表项点击触发选择，已配套 onKeyDown 处理键盘交互
     <div
       className="w-full h-full px-3.5 flex items-center justify-between rounded-lg text-left hover:bg-background dark:hover:bg-muted/50 transition-colors"
       onClick={onClick}

@@ -294,7 +294,7 @@ export function AppNavigation(): JSX.Element {
             style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
           >
             <div
-              className={`relative flex items-center justify-center border bg-background dark:bg-[#151515] mblur:bg-background/80 mblur:dark:bg-input/30 backdrop-blur-xs overflow-hidden transition-all duration-300 ease-out ${
+              className={`relative flex items-center justify-center border bg-background dark:bg-[#151515] backdrop-blur-xs overflow-hidden transition-all duration-300 ease-out ${
                 show ? "h-12 w-60 rounded-lg" : "h-3 w-10 rounded-lg"
               }`}
             >

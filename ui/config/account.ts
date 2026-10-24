@@ -1,24 +1,7 @@
 import { proxy, snapshot, subscribe } from "valtio";
 import { api } from "@/lib/controller.ts";
 import { debounce } from "@/lib/debounce";
-
-type MicrosoftAccount = {
-  type: "microsoft";
-  token: string;
-};
-
-type YggdrasilAccount = {
-  type: "yggdrasil";
-  token: string;
-};
-
-type OfflineAccount = {
-  type: "offline";
-  name: string;
-  uuid: string;
-};
-
-type Account = MicrosoftAccount | YggdrasilAccount | OfflineAccount;
+import type { Account } from "~/types/account.ts";
 
 export const accountConfig = proxy<Account[]>([]);
 

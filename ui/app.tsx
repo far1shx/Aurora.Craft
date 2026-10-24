@@ -41,12 +41,12 @@ export function App(): JSX.Element {
               key={location.pathname}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              exit={{ opacity: 0, y: 14 }}
               transition={{
                 type: "spring",
                 stiffness: 450,
                 damping: 32,
-                mass: 0.3,
+                mass: 0.1,
               }}
               className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-2"
             >

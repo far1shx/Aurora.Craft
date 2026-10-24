@@ -1,7 +1,8 @@
 import { mkdir, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { KyInstance, Progress } from "ky";
-import { logger } from "mirinjs";
+import { mirrorUrl } from "~/lib/config.ts";
+import { type Logger, createLogger } from "~/lib/logger.ts";
 import { formatSpeed, http } from "~/lib/utils.ts";
 
 export interface DownloadProgress {
@@ -16,7 +17,7 @@ export interface DownloadOptions {
   onProgress?: (progress: DownloadProgress) => void;
   timeout?: number | false;
   ky?: KyInstance;
-  logger?: typeof logger;
+  logger?: Logger;
 }
 
 const SAMPLE_INTERVAL = 250;
@@ -33,8 +34,10 @@ export async function download(
     onProgress,
     timeout = false,
     ky: kyInstance = http,
-    logger: log = logger.child("download"),
+    logger: log = createLogger("download"),
   } = options;
+
+  const downloadUrl = mirrorUrl(url);
 
   let previousBytes = 0;
   let previousTime = performance.now();
@@ -83,9 +86,9 @@ export async function download(
   let response: Response | undefined;
 
   try {
-    log.info(`start download: ${url}`);
+    log.info(`start download: ${downloadUrl}`);
 
-    response = await kyInstance.get(url, {
+    response = await kyInstance.get(downloadUrl, {
       timeout,
       onDownloadProgress: ({ percent, transferredBytes, totalBytes }: Progress) => {
         reportProgress(transferredBytes, totalBytes, totalBytes > 0 ? percent * 100 : 0);
@@ -93,7 +96,7 @@ export async function download(
     });
 
     if (!response.body) {
-      throw new Error(`the download response has no content: ${url}`);
+      throw new Error(`the download response has no content: ${downloadUrl}`);
     }
 
     await mkdir(dirname(outputPath), { recursive: true });
@@ -144,7 +147,7 @@ export async function download(
   } catch (error) {
     await rm(outputPath, { force: true }).catch(() => {});
 
-    log.error(`download failed: ${url}`);
+    log.error(`download failed: ${downloadUrl}`);
     throw error;
   }
 }

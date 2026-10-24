@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { logger } from "mirinjs";
-import type { LaunchController } from "~/controllers/launch.ts";
-import type { MutationInput } from "~/lib/utils.ts";
+import { createLogger } from "~/lib/logger.ts";
+import type { AppRPC } from "~/lib/rpc-schema.ts";
 import { collectArguments } from "~/service/arguments.ts";
 import { instanceConfig } from "~/service/instance.ts";
 import { librariesRule } from "~/service/library.ts";
@@ -12,9 +11,9 @@ import type { MinecraftVersion } from "~/types/minecraft.ts";
 export async function launchMinecraft({
   options,
 }: {
-  options: MutationInput<LaunchController["routes"]["run"]>;
+  options: AppRPC["bun"]["requests"]["launch.run"]["params"];
 }): Promise<boolean> {
-  const log = logger.child("launch").child("minecraft");
+  const log = createLogger("launch", "minecraft");
 
   try {
     const root = options.library;

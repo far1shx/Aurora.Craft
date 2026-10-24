@@ -1,21 +1,19 @@
 /**
  * Typed nested RPC client for dot-namespaced routes.
  *
- * Wraps `window.mirin.call("namespace.method", input)` behind a two-level
- * Proxy so callers write `api.window.min()` instead of `api["window.min"]()`.
+ * The transport (Electroview-backed) is injected once at app bootstrap; this
+ * module only turns flat `"namespace.method"` keys into a two-level proxy so
+ * callers can write `api.window.min(null)` / `api.event.task.on(cb)`.
  *
  * Usage (UI code only — never import server handler values):
  * ```ts
- * import type { AppController } from "~/main.ts";
- * import { nestedClient } from "@/lib/nested-client.ts";
- *
- * export const api = nestedClient<AppController>();
+ * import { api } from "@/lib/controller.ts";
  * await api.window.min(null);
- * await api.install.getVersionList(null);
+ * api.event.task.on((update) => { ... });
  * ```
  */
 
-import type { EventProc, MutationProc, QueryProc } from "mirinjs/rpc";
+import type { AppMessages, AppRequests } from "~/lib/rpc-schema.ts";
 
 // ── Type helpers ──────────────────────────────────────────────────────────────
 
@@ -25,111 +23,109 @@ type Namespace<K extends string> = K extends `${infer NS}.${string}` ? NS : neve
 /** Extract the method suffix for a given namespace from a `"NS.method"` key. */
 type MethodOf<K extends string, NS extends string> = K extends `${NS}.${infer M}` ? M : never;
 
-/** Convert a single Procedure type to its client-callable shape. */
-type ProcToClient<P> =
-  P extends QueryProc<infer I, infer O>
-    ? (input: I) => Promise<Awaited<O>>
-    : P extends MutationProc<infer I, infer O>
-      ? (input: I) => Promise<Awaited<O>>
-      : P extends EventProc<infer Payload>
-        ? { on(listener: (payload: Payload) => void): () => void }
-        : never;
+/** Convert a single request schema entry to its client-callable shape. */
+type RequestToClient<T> = T extends { params: infer I; response: infer O }
+  ? (input: I) => Promise<Awaited<O>>
+  : never;
+
+/** Convert a single message schema entry to its client-listener shape. */
+type MessageToClient<T> = { on(listener: (payload: T) => void): () => void };
+
+type RequestKeys = keyof AppRequests & string;
+type MessageKeys = keyof AppMessages & string;
 
 /**
- * Extract the `routes` record directly from a router-shaped object's property.
- *
- * We intentionally avoid `R extends Router<infer T>` here.  `NestedRouter<T>`
- * extends `Router<any>`, so TypeScript would infer `T = any` from the generic
- * parameter rather than picking up the narrowed `routes: FlatRoutes<T>` field.
- * Reading `R["routes"]` via a structural `infer` sidesteps that problem and
- * correctly resolves to `FlatRoutes<T>` with all its literal keys intact.
+ * Two-level client type for requests:
+ * `{ window: { min: (input: null) => Promise<void>, ... }, ... }`
  */
-type RoutesOf<R> = R extends { readonly routes: infer T } ? T : never;
-
-/**
- * Converts an `AppController` (or any nested-router shape) into a two-level
- * client type:
- *
- * ```
- * { "window.min": MutationProc<null, void> }
- *   →  { window: { min: (input: null) => Promise<void> } }
- * ```
- */
-export type NestedClientFor<R> = {
-  [NS in Namespace<keyof RoutesOf<R> & string>]: {
-    [M in MethodOf<keyof RoutesOf<R> & string, NS>]: `${NS}.${M}` extends keyof RoutesOf<R>
-      ? ProcToClient<RoutesOf<R>[`${NS}.${M}`]>
+type RequestClient = {
+  [NS in Namespace<RequestKeys>]: {
+    [M in MethodOf<RequestKeys, NS>]: `${NS}.${M}` extends keyof AppRequests
+      ? RequestToClient<AppRequests[`${NS}.${M}`]>
       : never;
   };
 };
 
+/**
+ * Two-level client type for event subscriptions:
+ * `{ event: { task: { on(l) { ... } }, toast: { on(l) { ... } } } }`
+ */
+type MessageClient = {
+  [NS in Namespace<MessageKeys>]: {
+    [M in MethodOf<MessageKeys, NS>]: `${NS}.${M}` extends keyof AppMessages
+      ? MessageToClient<AppMessages[`${NS}.${M}`]>
+      : never;
+  };
+};
+
+/** Combined client type — requests and messages merged. */
+export type NestedClient = RequestClient & MessageClient;
+
 // ── Runtime ───────────────────────────────────────────────────────────────────
 
-interface MirinTransport {
-  call(method: string, input: unknown): Promise<unknown>;
-  onEvent(method: string, listener: (payload: unknown) => void): () => void;
+/** Minimal transport the Electroview bootstrap must provide. */
+export interface RpcTransport {
+  request(method: string, params: unknown): Promise<unknown>;
+  on(method: string, listener: (payload: unknown) => void): () => void;
 }
 
-function transport(): MirinTransport {
-  // `window.mirin` is installed by the mirin preload bootstrap.
-  const t = (window as { mirin?: MirinTransport }).mirin;
-  if (!t) {
+let _transport: RpcTransport | undefined;
+
+export function setTransport(transport: RpcTransport): void {
+  _transport = transport;
+}
+
+function transport(): RpcTransport {
+  if (!_transport) {
     throw new Error(
-      "window.mirin is not available — this page is not running inside a mirin webview " +
-        "(or the preload bootstrap failed to authenticate).",
+      "RPC transport not initialized — import @/lib/rpc.ts before using the api client.",
     );
   }
-  return t;
+  return _transport;
 }
 
 /**
- * Create a typed two-level RPC client for a nested router.
+ * Create the typed two-level RPC client.
  *
- * Pass the router's *type* only — never import the router value (and its
- * handlers) into UI code.
- *
- * @example
- * ```ts
- * import type { AppController } from "~/main.ts";
- * export const api = nestedClient<AppController>();
- * await api.window.min(null);
- * ```
+ * `setTransport()` must have been called before the first request.
  */
-export function nestedClient<R>(): NestedClientFor<R> {
-  // Cache per-namespace sub-proxies so object identity is stable across renders.
-  const nsCache = new Map<string, object>();
+export function nestedClient(): NestedClient {
+  const namespaceCache = new Map<string, object>();
 
-  return new Proxy({} as NestedClientFor<R>, {
-    get(_target: NestedClientFor<R>, ns: string | symbol): unknown {
-      if (typeof ns !== "string") return undefined;
+  return new Proxy({} as NestedClient, {
+    get(_target: NestedClient, namespace: string | symbol): unknown {
+      if (typeof namespace !== "string") return undefined;
 
-      let sub = nsCache.get(ns);
+      let sub = namespaceCache.get(namespace);
       if (!sub) {
-        const evCache = new Map<string, { on(l: (p: unknown) => void): () => void }>();
+        // 同时缓存事件订阅方法与 query/mutation 方法，保证对象引用稳定
+        const eventCache = new Map<
+          string,
+          { on(listener: (payload: unknown) => void): () => void }
+        >();
 
         sub = new Proxy({} as Record<string, unknown>, {
           get(_t: Record<string, unknown>, method: string | symbol): unknown {
             if (typeof method !== "string") return undefined;
 
-            const fullMethod = `${ns}.${method}`;
+            const fullMethod = `${namespace}.${method}`;
             const callable = (input: unknown): Promise<unknown> =>
-              transport().call(fullMethod, input);
+              transport().request(fullMethod, input);
 
-            let ev = evCache.get(method);
-            if (!ev) {
-              ev = {
-                on: (listener: (p: unknown) => void): (() => void) =>
-                  transport().onEvent(fullMethod, listener),
+            let event = eventCache.get(method);
+            if (!event) {
+              event = {
+                on: (listener: (payload: unknown) => void): (() => void) =>
+                  transport().on(fullMethod, listener),
               };
-              evCache.set(method, ev);
+              eventCache.set(method, event);
             }
 
-            // Merge event helpers onto the callable so it works as both
-            // a function (query/mutation) and an event emitter.
-            return Object.assign(callable, ev);
+            // 让同一个属性既能当函数调用（query/mutation），又能当事件订阅器
+            return Object.assign(callable, event);
           },
         });
-        nsCache.set(ns, sub);
+        namespaceCache.set(namespace, sub);
       }
       return sub;
     },

@@ -1,13 +1,24 @@
-import { IconMinus, IconX } from "@tabler/icons-react";
+import { IconMenu, IconMinus, IconX } from "@tabler/icons-react";
+import { AnimatePresence, motion } from "motion/react";
 import type { JSX } from "react";
+import { useSnapshot } from "valtio/react";
 import { TaskSheetTrigger } from "@/components/sheet/task.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu.tsx";
 import { api } from "@/lib/controller.ts";
 import { dragStyle, noDragStyle } from "@/lib/drag.ts";
+import { task } from "@/lib/task.ts";
 import { isBeta } from "@/lib/utils.ts";
 
 function AppTitle(): JSX.Element {
+  const _task = useSnapshot(task);
+
   return (
     <div className="relative flex items-center p-1.5" style={dragStyle}>
       <div className="relative z-10 flex items-center gap-2">
@@ -24,7 +35,44 @@ function AppTitle(): JSX.Element {
       </div>
 
       <div className="flex items-center gap-1 ml-auto">
-        <TaskSheetTrigger />
+        <AnimatePresence>
+          {task.list.length !== 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.6 }}
+              transition={{
+                type: "spring",
+                stiffness: 500,
+                damping: 24,
+                mass: 0.7,
+              }}
+              style={{ transformOrigin: "center" }}
+            >
+              <TaskSheetTrigger />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <DropdownMenu>
+          <DropdownMenuContent align="center">
+            <DropdownMenuItem>
+              <IconMenu />
+              123
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+
+          <DropdownMenuTrigger>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              style={noDragStyle}
+              className="hover:bg-background dark:hover:bg-muted/50"
+            >
+              <IconMenu />
+            </Button>
+          </DropdownMenuTrigger>
+        </DropdownMenu>
 
         <Button
           size="icon-sm"

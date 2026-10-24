@@ -18,8 +18,23 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./ui/*"],
-      "~/*": ["./main/*"]
+      "~/*": ["./main/*"],
+      "electrobun": [".hutch/devkit/api/sdks/main/index.ts"],
+      "electrobun/main": [".hutch/devkit/api/sdks/main/index.ts"],
+      "electrobun/main/browser-view": [".hutch/devkit/api/sdks/main/entries/browser-view.ts"],
+      "electrobun/main/browser-window": [".hutch/devkit/api/sdks/main/entries/browser-window.ts"],
+      "electrobun/main/events": [".hutch/devkit/api/sdks/main/entries/events.ts"],
+      "electrobun/main/rpc": [".hutch/devkit/api/sdks/main/entries/rpc.ts"],
+      "electrobun/view": [".hutch/devkit/api/browser/index.ts"]
     }
   },
-  "include": ["mirin.config.ts", "main", "ui", "vite.config.ts"]
+  "include": [
+    "electrobun.config.ts",
+    "hutch.config.ts",
+    "main",
+    "scripts",
+    "ui",
+    "vite.config.ts",
+    ".hutch/devkit/api"
+  ]
 }
